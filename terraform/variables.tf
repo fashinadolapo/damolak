@@ -7,7 +7,7 @@ variable "aws_region" {
 variable "project_name" {
   description = "Project name — used as a prefix for all resources"
   type        = string
-  default     = "devops-challenge"
+  default     = "damolak"
 }
 
 variable "environment" {
@@ -57,7 +57,7 @@ variable "key_pair_name" {
 variable "app_instance_type" {
   description = "EC2 instance type for the application server"
   type        = string
-  default     = "t3.micro"
+  default     = "t4g.micro"
 }
 
 variable "app_port" {
@@ -82,4 +82,8 @@ variable "github_org" {
 variable "github_repo" {
   description = "GitHub repository name (without the org prefix)"
   type        = string
+}
+
+variable "public_key_path" {
+  type = string
 }

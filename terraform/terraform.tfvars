@@ -1,22 +1,23 @@
 # Copy to terraform.tfvars and fill in your values.
 # terraform.tfvars is gitignored — never commit it.
 
-aws_region   = "us-east-1"
-project_name = "devops-challenge"
+aws_region   = "eu-central-1"
+project_name = "damolak"
 environment  = "production"
-owner        = "your-name"
+owner        = "Dolapo_Fashina"
 
 # Networking
 vpc_cidr             = "10.0.0.0/16"
 public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
-allowed_ssh_cidr     = "YOUR_IP/32"   # curl ifconfig.me
+allowed_ssh_cidr     = "105.113.128.57/32"   # curl ifconfig.me
 
 # EC2
-key_pair_name     = "your-existing-keypair-name"
-app_instance_type = "t3.micro"
+key_pair_name     = "damolak"
+app_instance_type = "t4g.micro"
 app_port          = 3000
 app_version       = "latest"
+public_key_path   = "~/.ssh/damolak.pub"
 
 # GitHub — used to scope the OIDC trust to your repo only
-github_org  = "your-github-username-or-org"
-github_repo = "devops-challenge"
+github_org  = "fashinadolapo"
+github_repo = "damolak"

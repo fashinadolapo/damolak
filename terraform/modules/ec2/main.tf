@@ -6,7 +6,7 @@ data "aws_ami" "amazon_linux_2023" {
 
   filter {
     name   = "name"
-    values = ["al2023-ami-*-x86_64"]
+    values = ["al2023-ami-*-arm64"]
   }
 
   filter {
@@ -44,7 +44,7 @@ locals {
             "collect_list": [
               {
                 "file_path": "/var/log/user-data.log",
-                "log_group_name": "${log_group_name}",
+                "log_group_name": "$${log_group_name}",
                 "log_stream_name": "{instance_id}/bootstrap"
               }
             ]
@@ -76,16 +76,19 @@ locals {
 }
 
 # ── EC2 Instance ──────────────────────────────────────────────────────────────
+resource "aws_key_pair" "this" {
+  key_name   = var.key_name
+  public_key = file(pathexpand(var.public_key_path))
+}
 
 resource "aws_instance" "this" {
   ami                    = data.aws_ami.amazon_linux_2023.id
   instance_type          = var.instance_type
   subnet_id              = var.subnet_id
   vpc_security_group_ids = var.security_group_ids
-  key_name               = var.key_name
+  key_name               = aws_key_pair.this.key_name
   iam_instance_profile   = var.iam_instance_profile
-
-  user_data = base64encode(local.user_data)
+  user_data              = base64encode(local.user_data)
 
   root_block_device {
     volume_type           = "gp3"

@@ -10,3 +10,4 @@ variable "aws_region"            { type = string }
 variable "app_port"              { type = number }
 variable "app_version"           { type = string }
 variable "log_group_name"        { type = string }
+variable "public_key_path"       {type = string}

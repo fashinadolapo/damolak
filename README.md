@@ -31,7 +31,7 @@ See [`docs/architecture.mermaid`](docs/architecture.mermaid) — render at [merm
 
 - **VPC** — `10.0.0.0/16` with two public subnets across two AZs
 - **Internet Gateway** + public route tables
-- **EC2 — App Server** (`t3.micro`) — runs the Dockerised application
+- **EC2 — App Server** (`t4g.micro`) — runs the Dockerised application
 - **Elastic IP** — stable public IP for the app instance
 - **Security Group** — app traffic on port 3000; SSH restricted to your IP
 - **IAM Role (EC2)** — least-privilege ECR pull + CloudWatch publish
@@ -47,7 +47,7 @@ See [`docs/architecture.mermaid`](docs/architecture.mermaid) — render at [merm
 ## Repository Structure
 
 ```
-devops-challenge/
+damolak/
 ├── .github/
 │   └── workflows/
 │       └── deploy.yml            # GitHub Actions pipeline (3 jobs)

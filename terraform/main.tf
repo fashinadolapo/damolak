@@ -21,6 +21,7 @@ terraform {
 
 provider "aws" {
   region = var.aws_region
+  profile = "agrovesto-dev"
 
   default_tags {
     tags = {
@@ -97,6 +98,7 @@ module "ec2_app" {
   subnet_id            = module.vpc.public_subnet_ids[0]
   security_group_ids   = [module.security_groups.app_sg_id]
   key_name             = var.key_pair_name
+  public_key_path      = var.public_key_path
   iam_instance_profile = module.iam.ec2_instance_profile_name
   ecr_repository_url   = module.ecr.repository_url
   aws_region           = var.aws_region

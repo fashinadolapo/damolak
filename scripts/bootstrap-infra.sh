@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # scripts/bootstrap-infra.sh
-# Run once on your local machine to initialise and apply Terraform.
+# Run once on your local machine to initialize and apply Terraform.
 # Prerequisites: terraform CLI + AWS CLI configured with sufficient permissions.
 
 set -euo pipefail
@@ -16,7 +16,7 @@ command -v terraform &>/dev/null || error "terraform is not installed"
 command -v aws       &>/dev/null || error "aws CLI is not installed"
 
 log "AWS identity:"
-aws sts get-caller-identity
+aws sts get-caller-identity --profile agrovesto-dev
 
 # ── Terraform ─────────────────────────────────────────────────────────────────
 cd "$TF_DIR"
@@ -49,7 +49,7 @@ log "1. Add these values as GitHub Repository Secrets:"
 log "   AWS_OIDC_ROLE_ARN  →  $(terraform output -raw github_actions_role_arn)"
 log "   ECR_REPO_URL       →  $(terraform output -raw ecr_repository_url)"
 log "   APP_SERVER_IP      →  $(terraform output -raw app_public_ip)"
-log "   AWS_REGION         →  your region (e.g. us-east-1)"
+log "   AWS_REGION         →  your region (e.g. eu-central-1)"
 log "   APP_EC2_SSH_KEY    →  contents of your .pem private key"
 log ""
 log "2. Push to main to trigger the pipeline:"

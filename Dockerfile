@@ -1,5 +1,5 @@
 # ── Stage 1: Dependencies ────────────────────────────────────────────────────
-FROM node:18-alpine AS deps
+FROM node:22-alpine AS deps
 
 WORKDIR /app
 
@@ -10,7 +10,7 @@ COPY package*.json ./
 RUN npm ci --only=production && npm cache clean --force
 
 # ── Stage 2: Test ─────────────────────────────────────────────────────────────
-FROM node:18-alpine AS test
+FROM node:22-alpine AS test
 
 WORKDIR /app
 
@@ -23,7 +23,7 @@ COPY . .
 RUN npm run test:ci
 
 # ── Stage 3: Production ───────────────────────────────────────────────────────
-FROM node:18-alpine AS production
+FROM node:22-alpine AS production
 
 # Security: run as non-root user
 RUN addgroup -g 1001 -S appgroup && \
