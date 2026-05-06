@@ -25,20 +25,20 @@ RUN npm run test:ci
 # ── Stage 3: Production ───────────────────────────────────────────────────────
 FROM node:22-alpine AS production
 
+WORKDIR /app
+
+# Copy production app
+COPY package*.json ./
+
+RUN npm ci --omit=dev && npm cache clean --force 
+
+COPY app/src ./src
+
 # Security: run as non-root user
 RUN addgroup -g 1001 -S appgroup && \
     adduser  -u 1001 -S appuser -G appgroup
 
-WORKDIR /app
-
-# Copy production node_modules from deps stage
-COPY --from=deps --chown=appuser:appgroup /app/node_modules ./node_modules
-
-# Copy application source
-COPY --chown=appuser:appgroup app/src ./src
-COPY --chown=appuser:appgroup app/package*.json ./
-
-# Drop to non-root
+# Drop to non-roo
 USER appuser
 
 # Document the port
