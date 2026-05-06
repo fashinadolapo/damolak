@@ -1,0 +1,12 @@
+variable "project_name"         { type = string }
+variable "environment"           { type = string }
+variable "instance_type"         { type = string }
+variable "subnet_id"             { type = string }
+variable "security_group_ids"    { type = list(string) }
+variable "key_name"              { type = string }
+variable "iam_instance_profile"  { type = string }
+variable "ecr_repository_url"    { type = string }
+variable "aws_region"            { type = string }
+variable "app_port"              { type = number }
+variable "app_version"           { type = string }
+variable "log_group_name"        { type = string }

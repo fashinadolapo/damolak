@@ -1,0 +1,180 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-progress runs on the same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  AWS_REGION:      ${{ secrets.AWS_REGION }}
+  ECR_REPO_URL:    ${{ secrets.ECR_REPO_URL }}
+  APP_SERVER_IP:   ${{ secrets.APP_SERVER_IP }}
+  APP_PORT:        3000
+  IMAGE_TAG:       v${{ github.run_number }}-${{ github.sha && github.sha || 'local' }}
+
+jobs:
+
+  # ── Job 1: Test ─────────────────────────────────────────────────────────────
+  test:
+    name: Install & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        working-directory: app
+        run: npm ci
+
+      - name: Run tests with coverage
+        working-directory: app
+        run: npm run test:ci
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: app/coverage/
+          retention-days: 7
+
+  # ── Job 2: Build & Push ─────────────────────────────────────────────────────
+  build-and-push:
+    name: Build & Push to ECR
+    runs-on: ubuntu-latest
+    needs: test
+    # Only push on main branch — PRs only run tests
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    # OIDC permissions — allows the workflow to request an AWS token
+    permissions:
+      id-token: write   # required for OIDC
+      contents: read
+
+    outputs:
+      image-tag: ${{ steps.set-tag.outputs.tag }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set image tag
+        id: set-tag
+        run: |
+          TAG="v${{ github.run_number }}-${GITHUB_SHA::7}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Image tag: $TAG"
+
+      - name: Configure AWS credentials (OIDC — no long-lived keys)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region:     ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            --target production \
+            --build-arg APP_VERSION="${{ steps.set-tag.outputs.tag }}" \
+            --cache-from "${{ env.ECR_REPO_URL }}:latest" \
+            -t "${{ env.ECR_REPO_URL }}:${{ steps.set-tag.outputs.tag }}" \
+            -t "${{ env.ECR_REPO_URL }}:latest" \
+            -f Dockerfile \
+            .
+
+      - name: Push to ECR
+        run: |
+          docker push "${{ env.ECR_REPO_URL }}:${{ steps.set-tag.outputs.tag }}"
+          docker push "${{ env.ECR_REPO_URL }}:latest"
+          echo "Pushed: ${{ env.ECR_REPO_URL }}:${{ steps.set-tag.outputs.tag }}"
+
+  # ── Job 3: Deploy ────────────────────────────────────────────────────────────
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    environment: production   # maps to a GitHub Environment for approval gates
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region:     ${{ env.AWS_REGION }}
+
+      - name: Copy deploy script to App EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host:        ${{ env.APP_SERVER_IP }}
+          username:    ec2-user
+          key:         ${{ secrets.APP_EC2_SSH_KEY }}
+          source:      scripts/deploy.sh
+          target:      /opt/app/
+          strip_components: 1
+
+      - name: Deploy application
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host:     ${{ env.APP_SERVER_IP }}
+          username: ec2-user
+          key:      ${{ secrets.APP_EC2_SSH_KEY }}
+          timeout:  120s
+          script: |
+            set -euo pipefail
+            export ECR_URL="${{ env.ECR_REPO_URL }}"
+            export APP_VERSION="${{ needs.build-and-push.outputs.image-tag }}"
+            export APP_PORT="${{ env.APP_PORT }}"
+            export AWS_REGION="${{ env.AWS_REGION }}"
+            export LOG_GROUP="/devops-challenge/production/app"
+            chmod +x /opt/app/deploy.sh
+            bash /opt/app/deploy.sh
+
+      - name: Smoke test — verify /health
+        run: |
+          echo "Waiting 10s for container to stabilise..."
+          sleep 10
+          HTTP_STATUS=$(curl -o /dev/null -sw "%{http_code}" \
+            --max-time 10 \
+            "http://${{ env.APP_SERVER_IP }}:${{ env.APP_PORT }}/health")
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "❌ Smoke test FAILED — /health returned HTTP $HTTP_STATUS"
+            exit 1
+          fi
+          echo "✅ Smoke test PASSED — /health returned HTTP 200"
+
+      - name: Print deployment summary
+        run: |
+          echo ""
+          echo "╔══════════════════════════════════════╗"
+          echo "║        Deployment Successful          ║"
+          echo "╠══════════════════════════════════════╣"
+          echo "║ Image   : ${{ env.ECR_REPO_URL }}:${{ needs.build-and-push.outputs.image-tag }}"
+          echo "║ URL     : http://${{ env.APP_SERVER_IP }}:${{ env.APP_PORT }}"
+          echo "║ Health  : http://${{ env.APP_SERVER_IP }}:${{ env.APP_PORT }}/health"
+          echo "║ Run     : ${{ github.run_number }}"
+          echo "╚══════════════════════════════════════╝"

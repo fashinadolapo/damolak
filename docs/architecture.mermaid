@@ -1,0 +1,40 @@
+---
+title: DevOps Challenge — AWS Architecture (GitHub Actions)
+---
+flowchart TB
+    Dev["👨‍💻 Developer\nLocal Machine"]
+    GH["GitHub\nRepository"]
+
+    subgraph GHA ["GitHub Actions"]
+        J1["Job 1\nInstall & Test\n(npm ci + jest)"]
+        J2["Job 2\nBuild & Push\n(docker build → ECR)"]
+        J3["Job 3\nDeploy\n(SSH → deploy.sh → smoke test)"]
+        J1 --> J2 --> J3
+    end
+
+    subgraph AWS ["AWS (us-east-1)"]
+        OIDC["IAM OIDC Provider\ngithub.com → STS\n(no long-lived keys)"]
+
+        subgraph VPC ["VPC  10.0.0.0/16"]
+            subgraph PubSubnet ["Public Subnet  10.0.1.0/24"]
+                APP["App EC2  t3.micro\n+ Elastic IP\nDocker + CW Agent"]
+            end
+        end
+
+        ECR["Amazon ECR\nPrivate Registry\nImage Scanning"]
+        CW["AWS CloudWatch\nLog Groups\nDashboard\nAlarms"]
+        IAM_EC2["IAM Role (EC2)\nECR pull\nCloudWatch publish"]
+        IAM_GHA["IAM Role (GHA)\nECR push/pull\n(OIDC trust — main branch only)"]
+    end
+
+    Dev -->|"git push main"| GH
+    GH -->|"webhook trigger"| GHA
+
+    GHA -->|"AssumeRoleWithWebIdentity"| OIDC
+    OIDC --> IAM_GHA
+    IAM_GHA -->|"docker push"| ECR
+    IAM_GHA -->|"SSH + deploy"| APP
+
+    APP -->|"docker pull"| ECR
+    APP -->|"logs + metrics"| CW
+    IAM_EC2 -.->|"attached to instance"| APP
