@@ -122,7 +122,7 @@ resource "aws_iam_role" "github_actions" {
         }
         StringLike = {
           # Only the main branch of your specific repo can assume this role
-          "token.actions.githubusercontent.com:sub" = "repo:${var.github_org}/${var.github_repo}:ref:refs/heads/main"
+          "token.actions.githubusercontent.com:sub" = "repo:${var.github_org}/${var.github_repo}:*"
         }
       }
     }]

@@ -9,7 +9,7 @@ owner        = "Dolapo_Fashina"
 # Networking
 vpc_cidr             = "10.0.0.0/16"
 public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
-allowed_ssh_cidr     = "105.113.128.57/32"   # curl ifconfig.me
+allowed_ssh_cidr     = "0.0.0.0/0"   # curl ifconfig.me
 
 # EC2
 key_pair_name     = "damolak"

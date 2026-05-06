@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [main]
 
-# Cancel in-progress runs on the same branch
+# Prevent multiple concurrent deployments to the same environment
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -16,7 +16,6 @@ env:
   ECR_REPO_URL:    ${{ secrets.ECR_REPO_URL }}
   APP_SERVER_IP:   ${{ secrets.APP_SERVER_IP }}
   APP_PORT:        3000
-  IMAGE_TAG:       v${{ github.run_number }}-${{ github.sha && github.sha || 'local' }}
 
 jobs:
 
@@ -24,7 +23,6 @@ jobs:
   test:
     name: Install & Test
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -55,14 +53,10 @@ jobs:
     name: Build & Push to ECR
     runs-on: ubuntu-latest
     needs: test
-    # Only push on main branch — PRs only run tests
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-
-    # OIDC permissions — allows the workflow to request an AWS token
     permissions:
-      id-token: write   # required for OIDC
+      id-token: write   
       contents: read
-
     outputs:
       image-tag: ${{ steps.set-tag.outputs.tag }}
 
@@ -75,9 +69,8 @@ jobs:
         run: |
           TAG="v${{ github.run_number }}-${GITHUB_SHA::7}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "Image tag: $TAG"
 
-      - name: Configure AWS credentials (OIDC — no long-lived keys)
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
@@ -87,30 +80,30 @@ jobs:
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build Docker image
-        run: |
-          docker build \
-            --target production \
-            --build-arg APP_VERSION="${{ steps.set-tag.outputs.tag }}" \
-            --cache-from "${{ env.ECR_REPO_URL }}:latest" \
-            -t "${{ env.ECR_REPO_URL }}:${{ steps.set-tag.outputs.tag }}" \
-            -t "${{ env.ECR_REPO_URL }}:latest" \
-            -f Dockerfile \
-            .
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Push to ECR
-        run: |
-          docker push "${{ env.ECR_REPO_URL }}:${{ steps.set-tag.outputs.tag }}"
-          docker push "${{ env.ECR_REPO_URL }}:latest"
-          echo "Pushed: ${{ env.ECR_REPO_URL }}:${{ steps.set-tag.outputs.tag }}"
+      - name: Build and push multi-arch image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          target: production
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.ECR_REPO_URL }}:${{ steps.set-tag.outputs.tag }}
+            ${{ env.ECR_REPO_URL }}:latest
+          cache-from: type=registry,ref=${{ env.ECR_REPO_URL }}:buildcache
+          cache-to: type=registry,ref=${{ env.ECR_REPO_URL }}:buildcache,mode=max
+          build-args: |
+            APP_VERSION=${{ steps.set-tag.outputs.tag }}
 
   # ── Job 3: Deploy ────────────────────────────────────────────────────────────
   deploy:
     name: Deploy to EC2
     runs-on: ubuntu-latest
     needs: build-and-push
-    environment: production   # maps to a GitHub Environment for approval gates
-
+    environment: production
     permissions:
       id-token: write
       contents: read
@@ -135,7 +128,7 @@ jobs:
           target:      /opt/app/
           strip_components: 1
 
-      - name: Deploy application
+      - name: Deploy application via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host:     ${{ env.APP_SERVER_IP }}
@@ -148,31 +141,16 @@ jobs:
             export APP_VERSION="${{ needs.build-and-push.outputs.image-tag }}"
             export APP_PORT="${{ env.APP_PORT }}"
             export AWS_REGION="${{ env.AWS_REGION }}"
-            export LOG_GROUP="/devops-challenge/production/app"
             chmod +x /opt/app/deploy.sh
-            bash /opt/app/deploy.sh
+            /opt/app/deploy.sh
 
-      - name: Smoke test — verify /health
+      - name: Smoke test
         run: |
-          echo "Waiting 10s for container to stabilise..."
-          sleep 10
-          HTTP_STATUS=$(curl -o /dev/null -sw "%{http_code}" \
-            --max-time 10 \
-            "http://${{ env.APP_SERVER_IP }}:${{ env.APP_PORT }}/health")
+          echo "Waiting 15s for container..."
+          sleep 15
+          HTTP_STATUS=$(curl -o /dev/null -sw "%{http_code}" --max-time 10 "http://${{ env.APP_SERVER_IP }}:${{ env.APP_PORT }}/health")
           if [ "$HTTP_STATUS" != "200" ]; then
-            echo "❌ Smoke test FAILED — /health returned HTTP $HTTP_STATUS"
+            echo "❌ Smoke test FAILED with status $HTTP_STATUS"
             exit 1
           fi
-          echo "✅ Smoke test PASSED — /health returned HTTP 200"
-
-      - name: Print deployment summary
-        run: |
-          echo ""
-          echo "╔══════════════════════════════════════╗"
-          echo "║        Deployment Successful          ║"
-          echo "╠══════════════════════════════════════╣"
-          echo "║ Image   : ${{ env.ECR_REPO_URL }}:${{ needs.build-and-push.outputs.image-tag }}"
-          echo "║ URL     : http://${{ env.APP_SERVER_IP }}:${{ env.APP_PORT }}"
-          echo "║ Health  : http://${{ env.APP_SERVER_IP }}:${{ env.APP_PORT }}/health"
-          echo "║ Run     : ${{ github.run_number }}"
-          echo "╚══════════════════════════════════════╝"
+          echo "✅ Smoke test PASSED"
