@@ -1,52 +1,50 @@
-# ── Stage 1: Dependencies ────────────────────────────────────────────────────
-FROM node:22-alpine AS deps
-
+# --- STAGE 1: Base ---
+FROM node:22-alpine AS base
 WORKDIR /app
+# Enable corepack for modern package managers (pnpm/yarn) if needed
+RUN corepack enable
 
-# Copy only manifests first to leverage layer caching
-COPY package*.json ./
+# --- STAGE 2: Dependencies ---
+FROM base AS deps
+# Copy only files needed for install to maximize layer caching
+COPY package.json package-lock.json* ./
+# Use 'npm ci' for a fast, deterministic, and "clean" install
+RUN npm ci
 
-# Install production deps only
-RUN npm ci --only=production && npm cache clean --force
-
-# ── Stage 2: Test ─────────────────────────────────────────────────────────────
-FROM node:22-alpine AS test
-
-WORKDIR /app
-
-COPY package*.json ./
-RUN npm ci && npm cache clean --force
-
+# --- STAGE 3: Builder ---
+FROM base AS builder
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# Set environment to production during build
+ENV NODE_ENV=production
+RUN npm run build
 
-# Run tests — build fails if tests fail
-RUN npm run test:ci
+# --- STAGE 4: Runner (Production) ---
+FROM nginx:1.27-alpine AS runner
 
-# ── Stage 3: Production ───────────────────────────────────────────────────────
-FROM node:22-alpine AS production
+# 1. Create a non-root user for security
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
-WORKDIR /app
+# 2. Setup permissions for Nginx to run as non-root
+# Nginx needs access to these directories to manage cache and PIDs
+RUN touch /var/run/nginx.pid && \
+    chown -R appuser:appgroup /var/run/nginx.pid /var/cache/nginx /var/log/nginx /etc/nginx/conf.d
 
-# Copy production app
-COPY package*.json ./
+# 3. Copy custom Nginx config (essential for SPA routing)
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-RUN npm ci --omit=dev && npm cache clean --force 
+# 4. Copy build artifacts from builder stage
+WORKDIR /usr/share/nginx/html
+COPY --from=builder --chown=appuser:appgroup /app/dist .
 
-COPY app/src ./src
-
-# Security: run as non-root user
-RUN addgroup -g 1001 -S appgroup && \
-    adduser  -u 1001 -S appuser -G appgroup
-
-# Drop to non-roo
+# 5. Switch to the non-root user
 USER appuser
 
-# Document the port
+# 6. Expose a non-privileged port (standard for non-root is 8080)
 EXPOSE 3000
 
-# Health check — Docker will mark container unhealthy if this fails
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -qO- http://localhost:3000/health || exit 1
+# 7. Healthcheck to ensure the container is actually serving traffic
+HEALTHCHECK --interval=30s --timeout=3s \
+  CMD wget --quiet --tries=1 --spider http://localhost:3000/ || exit 1
 
-# Use exec form to receive signals properly
-CMD ["node", "src/index.js"]
+CMD ["nginx", "-g", "daemon off;"]
