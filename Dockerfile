@@ -7,14 +7,14 @@ RUN corepack enable
 # --- STAGE 2: Dependencies ---
 FROM base AS deps
 # Copy only files needed for install to maximize layer caching
-COPY package.json package-lock.json* ./
+COPY app/package.json app/package-lock.json* ./
 # Use 'npm ci' for a fast, deterministic, and "clean" install
 RUN npm ci
 
 # --- STAGE 3: Builder ---
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+COPY app/  .
 # Set environment to production during build
 ENV NODE_ENV=production
 RUN npm run build
