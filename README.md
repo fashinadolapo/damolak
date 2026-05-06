@@ -20,7 +20,7 @@ See [`docs/architecture.mermaid`](docs/architecture.mermaid) — render at [merm
 
 | Component | Technology | Purpose |
 |---|---|---|
-| Application | Node.js 18 / Express | REST microservice with `/`, `/health`, `/metrics` endpoints |
+| Application | Node.js 22 / Express | REST microservice with `/`, `/health`, `/metrics` endpoints |
 | Containerisation | Docker (multi-stage build) | Reproducible, minimal production image |
 | Infrastructure | Terraform (modular) | VPC, EC2, ECR, IAM, CloudWatch |
 | CI/CD | GitHub Actions | 3-job pipeline: Test → Build & Push → Deploy |
@@ -88,7 +88,7 @@ damolak/
 | Terraform | 1.6.0 | [Install](https://developer.hashicorp.com/terraform/install) |
 | AWS CLI | 2.x | Configured with a profile that can create VPCs, EC2, ECR, IAM resources |
 | Docker | 24.x | Local development only |
-| Node.js | 18.x | Local development only |
+| Node.js | 22.x | Local development only |
 | EC2 Key Pair | — | Must already exist in your target AWS region |
 
 ---
@@ -99,7 +99,7 @@ damolak/
 
 ```bash
 # Fork the repo on GitHub first, then:
-git clone https://github.com/YOUR_USERNAME/devops-challenge.git
+git clone https://github.com/YOUR_USERNAME/damolak.git
 cd devops-challenge
 ```
 
@@ -134,7 +134,7 @@ Go to your repo → **Settings → Secrets and variables → Actions → New rep
 
 | Secret Name | Value | Where to get it |
 |---|---|---|
-| `AWS_REGION` | e.g. `us-east-1` | Your `terraform.tfvars` |
+| `AWS_REGION` | e.g. `eu-central-1` | Your `terraform.tfvars` |
 | `AWS_OIDC_ROLE_ARN` | `arn:aws:iam::...` | `terraform output github_actions_role_arn` |
 | `ECR_REPO_URL` | `<account>.dkr.ecr.<region>.amazonaws.com/...` | `terraform output ecr_repository_url` |
 | `APP_SERVER_IP` | App EC2 public IP | `terraform output app_public_ip` |
@@ -204,7 +204,7 @@ push to main
     │
     ▼
 ┌─────────────────────┐
-│  Job 1: test         │  Node 18 → npm ci → jest --ci --coverage
+│  Job 1: test         │  Node 22 → npm ci → jest --ci --coverage
 └──────────┬──────────┘
            │ (must pass)
     ▼
@@ -316,4 +316,4 @@ terraform destroy
 
 ## Author
 
-Submitted as part of the DevOps Engineer Practical Challenge (96-hour assessment).
+Dolapo Fashina.
