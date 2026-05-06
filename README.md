@@ -234,7 +234,7 @@ PRs only run Job 1 (tests) — no image is pushed or deployed.
 Query recent errors:
 ```bash
 aws logs filter-log-events \
-  --log-group-name /devops-challenge/production/app \
+  --log-group-name /damolak/production/app \
   --filter-pattern "ERROR" \
   --region us-east-1
 ```
