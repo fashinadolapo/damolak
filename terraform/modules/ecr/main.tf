@@ -39,7 +39,7 @@ resource "aws_ecr_lifecycle_policy" "app" {
           tagStatus     = "tagged"
           tagPrefixList = ["v", "latest"]
           countType     = "imageCountMoreThan"
-          countNumber   = 10
+          countNumber   = 2
         }
         action = { type = "expire" }
       }

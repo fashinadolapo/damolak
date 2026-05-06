@@ -163,7 +163,7 @@ resource "aws_iam_role_policy" "github_actions_ecr" {
           "ecr:DescribeRepositories",
           "ecr:ListImages",
         ]
-        Resource = "arn:aws:ecr:${var.aws_region}:${var.account_id}:repository/${var.project_name}/*"
+        Resource = "arn:aws:ecr:${var.aws_region}:${var.account_id}:repository/${var.project_name}-${var.environment}-*"
       }
     ]
   })
