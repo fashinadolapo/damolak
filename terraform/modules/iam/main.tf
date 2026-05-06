@@ -62,7 +62,12 @@ resource "aws_iam_role_policy" "cloudwatch_policy" {
           "logs:DescribeLogStreams",
           "logs:DescribeLogGroups",
         ]
-        Resource = "arn:aws:logs:${var.aws_region}:${var.account_id}:log-group:/${var.project_name}/*"
+        Resource = [
+          # Permission for the log group itself
+          "arn:aws:logs:${var.aws_region}:${var.account_id}:log-group:/${var.project_name}/${var.environment}/app",
+          # Permission for all log streams inside that group
+          "arn:aws:logs:${var.aws_region}:${var.account_id}:log-group:/${var.project_name}/${var.environment}/app:*"
+        ]        
       },
       {
         Sid    = "CloudWatchMetrics"
@@ -158,7 +163,7 @@ resource "aws_iam_role_policy" "github_actions_ecr" {
           "ecr:DescribeRepositories",
           "ecr:ListImages",
         ]
-        Resource = "arn:aws:ecr:${var.aws_region}:${var.account_id}:repository/*"
+        Resource = "arn:aws:ecr:${var.aws_region}:${var.account_id}:repository/${var.project_name}/*"
       }
     ]
   })
