@@ -20,7 +20,7 @@ ENV NODE_ENV=production
 RUN npm run build
 
 # --- STAGE 4: Runner (Production) ---
-FROM nginx:1.27-alpine AS runner
+FROM nginx:1.27-alpine AS production
 
 # 1. Create a non-root user for security
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
